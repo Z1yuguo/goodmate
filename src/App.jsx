@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 
+const ADMIN_PASSWORD = 'goodmate1998-2026'
+const DOWNVOTE_THRESHOLD = 3
+
 function getAnonId() {
   let id = localStorage.getItem('anon_id')
   if (!id) {
@@ -20,7 +23,6 @@ function markRepliedToday() {
   localStorage.setItem('last_replied', new Date().toISOString())
 }
 
-const DOWNVOTE_THRESHOLD = 3
 const anonId = getAnonId()
 
 export default function App() {
@@ -33,6 +35,9 @@ export default function App() {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [voted, setVoted] = useState({})
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [adminInput, setAdminInput] = useState('')
+  const [showAdminLogin, setShowAdminLogin] = useState(false)
 
   useEffect(() => {
     if (hasRepliedToday()) {
@@ -155,6 +160,26 @@ export default function App() {
     ))
   }
 
+  async function deletePost(postId) {
+    await supabase.from('posts').delete().eq('id', postId)
+    setPosts(prev => prev.filter(p => p.id !== postId))
+  }
+
+  async function deleteReply(replyId) {
+    await supabase.from('replies').delete().eq('id', replyId)
+    setReplies(prev => prev.filter(r => r.id !== replyId))
+  }
+
+  function handleAdminLogin() {
+    if (adminInput === ADMIN_PASSWORD) {
+      setIsAdmin(true)
+      setShowAdminLogin(false)
+      setAdminInput('')
+    } else {
+      alert('Wrong password')
+    }
+  }
+
   function openPost(post) {
     setSelectedPost(post)
     fetchReplies(post.id)
@@ -194,14 +219,42 @@ export default function App() {
   if (page === 'feed') return (
     <div className="max-w-xl mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Goodmate</h1>
-        <button
-          onClick={() => setPage('new')}
-          className="bg-black text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-800 transition"
+        <h1
+          className="text-3xl font-bold cursor-pointer"
+          onClick={() => setShowAdminLogin(prev => !prev)}
         >
-          + New Post
-        </button>
+          Goodmate
+        </h1>
+        <div className="flex gap-2 items-center">
+          {isAdmin && (
+            <span className="text-xs text-green-600 font-medium">Admin</span>
+          )}
+          <button
+            onClick={() => setPage('new')}
+            className="bg-black text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-800 transition"
+          >
+            + New Post
+          </button>
+        </div>
       </div>
+
+      {showAdminLogin && !isAdmin && (
+        <div className="border border-gray-200 rounded-xl p-4 mb-4 flex gap-2">
+          <input
+            type="password"
+            placeholder="Admin password"
+            value={adminInput}
+            onChange={e => setAdminInput(e.target.value)}
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+          />
+          <button
+            onClick={handleAdminLogin}
+            className="bg-black text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-800 transition"
+          >
+            Enter
+          </button>
+        </div>
+      )}
 
       {posts.length === 0 && (
         <p className="text-gray-400 text-sm">No posts yet. Be the first!</p>
@@ -213,7 +266,7 @@ export default function App() {
             <p className="font-semibold">{post.title}</p>
             <p className="text-xs text-gray-400 mt-1">Anon · {new Date(post.created_at).toLocaleString()}</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
             <button
               onClick={() => handleVote(post, 'up')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition ${
@@ -234,6 +287,14 @@ export default function App() {
             >
               🌫️ {post.downvotes}
             </button>
+            {isAdmin && (
+              <button
+                onClick={() => deletePost(post.id)}
+                className="ml-auto text-xs text-red-400 hover:text-red-600 transition"
+              >
+                Delete
+              </button>
+            )}
           </div>
         </div>
       ))}
@@ -254,9 +315,19 @@ export default function App() {
       <h3 className="font-semibold mb-3">Replies</h3>
       {replies.length === 0 && <p className="text-sm text-gray-400 mb-4">No replies yet.</p>}
       {replies.map(r => (
-        <div key={r.id} className="border-b border-gray-100 py-3">
-          <p className="text-sm">{r.content}</p>
-          <p className="text-xs text-gray-400 mt-1">Anon · {new Date(r.created_at).toLocaleString()}</p>
+        <div key={r.id} className="border-b border-gray-100 py-3 flex justify-between items-start">
+          <div>
+            <p className="text-sm">{r.content}</p>
+            <p className="text-xs text-gray-400 mt-1">Anon · {new Date(r.created_at).toLocaleString()}</p>
+          </div>
+          {isAdmin && (
+            <button
+              onClick={() => deleteReply(r.id)}
+              className="text-xs text-red-400 hover:text-red-600 transition ml-4 shrink-0"
+            >
+              Delete
+            </button>
+          )}
         </div>
       ))}
       <div className="mt-4">
